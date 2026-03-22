@@ -57,5 +57,6 @@ class PageArtifacts:
     table_gray: np.ndarray
     table_binary: np.ndarray
     tokens: list[OCRToken]
-    row_centers: list[float]
-    row_bounds: list[tuple[int, int]]
+    row_centers: dict[int, float]
+    row_bounds: dict[int, tuple[int, int]]
+    row_anchors: dict[int, float]

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class PageLayout:
     side: str
+    table_bbox_ratio: tuple[float, float, float, float]
     fallback_body_top_ratio: float
     fallback_body_bottom_ratio: float
     row_number_ratio: tuple[float, float]
@@ -14,8 +15,9 @@ class PageLayout:
 
 MADRAS_EXPORTS_LEFT = PageLayout(
     side="left",
-    fallback_body_top_ratio=0.19,
-    fallback_body_bottom_ratio=0.985,
+    table_bbox_ratio=(0.07295, 0.15308, 0.67191, 0.75114),
+    fallback_body_top_ratio=0.188,
+    fallback_body_bottom_ratio=0.982,
     row_number_ratio=(0.0, 0.075),
     columns={
         "row_no": (0.0, 0.075),
@@ -32,8 +34,9 @@ MADRAS_EXPORTS_LEFT = PageLayout(
 
 MADRAS_EXPORTS_RIGHT = PageLayout(
     side="right",
-    fallback_body_top_ratio=0.17,
-    fallback_body_bottom_ratio=0.985,
+    table_bbox_ratio=(0.09714, 0.17474, 0.69972, 0.71864),
+    fallback_body_top_ratio=0.165,
+    fallback_body_bottom_ratio=0.982,
     row_number_ratio=(0.0, 0.04),
     columns={
         "row_no": (0.0, 0.04),

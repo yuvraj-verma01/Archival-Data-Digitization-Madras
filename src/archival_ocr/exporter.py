@@ -1,4 +1,4 @@
-﻿"""CSV/XLSX export helpers."""
+"""CSV/XLSX export helpers."""
 
 from __future__ import annotations
 

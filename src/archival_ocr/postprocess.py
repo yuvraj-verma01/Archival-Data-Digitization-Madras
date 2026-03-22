@@ -25,6 +25,12 @@ def clean_numeric_value(raw_text: str) -> tuple[Any, bool]:
         .replace("|", "")
     )
     normalized = normalized.strip(".,;:")
+    if re.fullmatch(r"-?\d{1,3}(\.\d{3})+", normalized):
+        normalized = normalized.replace(".", "")
+    elif normalized.count(".") == 1:
+        head, tail = normalized.split(".")
+        if head.lstrip("-").isdigit() and tail.isdigit() and len(tail) == 3:
+            normalized = f"{head}{tail}"
     if not any(character.isdigit() for character in normalized):
         return pd.NA, True
     if re.fullmatch(r"-?\d+", normalized):

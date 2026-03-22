@@ -72,3 +72,12 @@ TEXT_FIELDS = {
 }
 
 RATE_FIELDS = {"foreign_duty_rate", "indian_duty_rate"}
+
+CELL_PRIMARY_FIELDS = {
+    "article",
+    "foreign_value_rs",
+    "indian_value_rs",
+    "total_value",
+}
+
+LONG_TEXT_FIELDS = {"article", "remarks"}
