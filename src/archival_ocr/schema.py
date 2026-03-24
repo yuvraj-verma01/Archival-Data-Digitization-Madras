@@ -21,6 +21,7 @@ OUTPUT_COLUMNS = [
     "total_value",
     "remarks",
     "raw_ocr_text",
+    "llm_notes",
     "confidence_flag",
 ]
 

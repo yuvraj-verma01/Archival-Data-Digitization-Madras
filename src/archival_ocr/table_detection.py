@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from statistics import median
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -224,3 +225,34 @@ def draw_grid_overlay(
         end_x = int(width * end_ratio)
         cv2.line(overlay, (end_x, 0), (end_x, height), (255, 0, 0), 1)
     return overlay
+
+
+def save_debug_grid(
+    page_img: np.ndarray,
+    row_bounds: dict[int, tuple[int, int]],
+    col_bounds: dict[str, tuple[int, int]],
+    output_path: Path,
+) -> None:
+    overlay = page_img.copy()
+    height, width = overlay.shape[:2]
+
+    for _, (top, bottom) in sorted(row_bounds.items()):
+        cv2.line(overlay, (0, top), (width, top), (0, 255, 0), 1)
+        cv2.line(overlay, (0, bottom), (width, bottom), (0, 255, 0), 1)
+
+    for label, (left, right) in col_bounds.items():
+        cv2.line(overlay, (left, 0), (left, height), (255, 0, 0), 1)
+        cv2.putText(
+            overlay,
+            label,
+            (left + 2, 18),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.35,
+            (255, 0, 0),
+            1,
+            cv2.LINE_AA,
+        )
+        cv2.line(overlay, (right, 0), (right, height), (255, 0, 0), 1)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(output_path), overlay)

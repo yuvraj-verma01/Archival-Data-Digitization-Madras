@@ -9,8 +9,10 @@ from pathlib import Path
 from .exporter import export_records
 from .layouts import SPREAD_LAYOUTS
 from .models import PageArtifacts
+from known_articles import KNOWN_ARTICLES
+
 from .ocr_engines import OCRBackendChain, normalize_joined_tokens, score_candidate
-from .postprocess import finalize_record
+from .postprocess import finalize_records
 from .preprocess import cell_content_features, preprocess_page
 from .rendering import render_page
 from .schema import CELL_PRIMARY_FIELDS, LEFT_PAGE_FIELDS, OUTPUT_COLUMNS, RIGHT_PAGE_FIELDS
@@ -21,6 +23,7 @@ from .table_detection import (
     draw_table_overlay,
     extract_crop,
     resolve_table_bbox,
+    save_debug_grid,
 )
 from .utils import ensure_dir, normalize_basic_text, save_image, write_json
 
@@ -28,6 +31,26 @@ from .utils import ensure_dir, normalize_basic_text, save_image, write_json
 def _column_pixels(layout, table_width: int, field_name: str) -> tuple[int, int]:
     start_ratio, end_ratio = layout.columns[field_name]
     return int(table_width * start_ratio), int(table_width * end_ratio)
+
+
+def _page_column_bounds(artifacts: PageArtifacts, layout) -> dict[str, tuple[int, int]]:
+    table_width = artifacts.table_image.shape[1]
+    table_left = artifacts.table_bbox.x
+    return {
+        field_name: (
+            table_left + int(table_width * start_ratio),
+            table_left + int(table_width * end_ratio),
+        )
+        for field_name, (start_ratio, end_ratio) in layout.columns.items()
+    }
+
+
+def _page_row_bounds(artifacts: PageArtifacts) -> dict[int, tuple[int, int]]:
+    table_top = artifacts.table_bbox.y
+    return {
+        row_no: (table_top + top, table_top + bottom)
+        for row_no, (top, bottom) in artifacts.row_bounds.items()
+    }
 
 
 def _clip_box(
@@ -108,6 +131,15 @@ def _candidate_boxes(
         ("shift_left", _clip_box(artifacts, left - dx, right - dx, top, bottom)),
         ("shift_right", _clip_box(artifacts, left + dx, right + dx, top, bottom)),
     ]
+    if field_name in {
+        "foreign_duty_rs",
+        "foreign_duty_as",
+        "foreign_duty_p",
+        "indian_duty_rs",
+        "indian_duty_as",
+        "indian_duty_p",
+    }:
+        variants = [variants[0], variants[1], variants[-1]]
     deduped: list[tuple[str, tuple[int, int, int, int]]] = []
     seen: set[tuple[int, int, int, int]] = set()
     for variant_name, box in variants:
@@ -201,6 +233,17 @@ def _prefer_token_text(
     token_confidence = (sum(token_confidences) / len(token_confidences)) if token_confidences else None
     token_score = score_candidate(field_name, token_text, token_confidence)
     cell_score = score_candidate(field_name, cell_text, cell_confidence)
+    if field_name == "article":
+        token_word_count = len(re.findall(r"[A-Za-z]+", token_text))
+        cell_word_count = len(re.findall(r"[A-Za-z]+", cell_text))
+        if (
+            token_score >= 0.8
+            and (token_confidence or 0.0) >= 0.3
+            and (cell_word_count >= 6 or len(cell_text) >= 40)
+        ):
+            return True
+        if token_score >= (cell_score - 0.3) and cell_word_count > (token_word_count + 3):
+            return True
     if (
         field_name == "article"
         and token_confidence is not None
@@ -220,10 +263,10 @@ def _cell_text(
     backend_chain: OCRBackendChain,
     *,
     ensemble: bool,
-) -> tuple[str, float | None, str | None, list[int]]:
+) -> tuple[str, float | None, str | None, list[int], dict[str, str]]:
     base_box = _cell_box(layout, artifacts, row_no, field_name)
     variants = _candidate_boxes(artifacts, base_box, field_name)
-    best_candidate: tuple[float, str, float | None, str | None, list[int]] | None = None
+    best_candidate: tuple[float, str, float | None, str | None, list[int], dict[str, str]] | None = None
     blank_signals: list[dict[str, float | int | bool]] = []
 
     for index, (variant_name, box) in enumerate(variants):
@@ -235,7 +278,7 @@ def _cell_text(
         if signal["likely_blank"]:
             continue
 
-        result = backend_chain.cell_text(cell_gray, field_name, ensemble=ensemble)
+        result, all_outputs = backend_chain.cell_text(cell_gray, field_name, ensemble=ensemble)
         candidate_score = score_candidate(field_name, result.text, result.confidence)
         candidate = (
             candidate_score,
@@ -243,6 +286,7 @@ def _cell_text(
             result.confidence,
             f"{result.engine}@{variant_name}",
             [left, right, top, bottom],
+            all_outputs,
         )
         if best_candidate is None or candidate_score > best_candidate[0]:
             best_candidate = candidate
@@ -251,13 +295,13 @@ def _cell_text(
             break
 
     if best_candidate is not None:
-        _, text, confidence, engine, crop_box = best_candidate
-        return text, confidence, engine, crop_box
+        _, text, confidence, engine, crop_box, all_outputs = best_candidate
+        return text, confidence, engine, crop_box, all_outputs
 
     if blank_signals and all(bool(signal["likely_blank"]) for signal in blank_signals):
-        return "", None, "blank_classifier", list(base_box)
+        return "", None, "blank_classifier", list(base_box), {"blank_classifier": ""}
 
-    return "", None, None, list(base_box)
+    return "", None, None, list(base_box), {}
 
 
 def _page_artifacts(
@@ -325,6 +369,11 @@ def run_pipeline(
     expected_rows: int | None,
     layout_name: str,
     ocr_backend: str,
+    debug: bool = False,
+    use_paddle: bool = True,
+    use_deepseek: bool = True,
+    use_glm: bool = True,
+    use_llm: bool = True,
 ) -> dict:
     layout_bundle = SPREAD_LAYOUTS[layout_name]
     expected_rows = expected_rows or layout_bundle["expected_rows"]
@@ -341,7 +390,10 @@ def run_pipeline(
     backend_chain = OCRBackendChain(
         backend_name=ocr_backend,
         workspace_root=outdir,
-        allow_paddle=(ocr_backend in {"auto", "paddle"}),
+        allow_paddle=use_paddle,
+        use_deepseek=use_deepseek,
+        use_glm=use_glm,
+        known_articles=KNOWN_ARTICLES,
     )
 
     left_artifacts = _page_artifacts(
@@ -363,7 +415,21 @@ def run_pipeline(
         output_dirs=output_dirs,
     )
 
-    records: list[dict] = []
+    if debug:
+        save_debug_grid(
+            left_artifacts.image,
+            _page_row_bounds(left_artifacts),
+            _page_column_bounds(left_artifacts, layout_bundle["left"]),
+            outdir / "debug_left_grid.png",
+        )
+        save_debug_grid(
+            right_artifacts.image,
+            _page_row_bounds(right_artifacts),
+            _page_column_bounds(right_artifacts, layout_bundle["right"]),
+            outdir / "debug_right_grid.png",
+        )
+
+    raw_records: list[dict] = []
     debug_rows: list[dict] = []
 
     for row_no in range(1, expected_rows + 1):
@@ -417,7 +483,7 @@ def run_pipeline(
                     engine_used = "table_tokens" if token_text else None
                     crop_box = [left, right, top, bottom]
                     if not final_text or _needs_retry(field_name, final_text, field_conf):
-                        fallback_text, fallback_conf, fallback_engine, fallback_box = _cell_text(
+                        fallback_text, fallback_conf, fallback_engine, fallback_box, fallback_all = _cell_text(
                             artifacts,
                             layout,
                             row_no,
@@ -436,8 +502,14 @@ def run_pipeline(
                             field_conf = fallback_conf
                             engine_used = fallback_engine
                             crop_box = fallback_box
+                            all_outputs = {"table_tokens": token_text, **fallback_all}
                         elif not final_text:
                             engine_used = fallback_engine or engine_used
+                            all_outputs = {"table_tokens": token_text, **fallback_all}
+                        else:
+                            all_outputs = {"table_tokens": token_text, **fallback_all}
+                    else:
+                        all_outputs = {"table_tokens": token_text}
                 else:
                     left, right, top, bottom = _token_box(layout, artifacts, row_no, field_name)
                     token_text, token_confidences = _assign_tokens_to_field(
@@ -452,10 +524,11 @@ def run_pipeline(
                     field_conf = (sum(token_confidences) / len(token_confidences)) if token_confidences else None
                     engine_used = "table_tokens"
                     crop_box = [left, right, top, bottom]
+                    all_outputs = {"table_tokens": token_text}
                     if _should_retry_field(field_name) and (
                         not final_text or _needs_retry(field_name, final_text, field_conf)
                     ):
-                        fallback_text, fallback_conf, fallback_engine, crop_box = _cell_text(
+                        fallback_text, fallback_conf, fallback_engine, crop_box, fallback_all = _cell_text(
                             artifacts,
                             layout,
                             row_no,
@@ -471,6 +544,7 @@ def run_pipeline(
                             final_text = fallback_text
                             field_conf = fallback_conf
                             engine_used = fallback_engine or engine_used
+                        all_outputs = {"table_tokens": token_text, **fallback_all}
 
                 raw_record[field_name] = final_text
                 cell_debug[field_name] = {
@@ -478,6 +552,7 @@ def run_pipeline(
                     "confidence": field_conf,
                     "engine": engine_used,
                     "crop_box": crop_box,
+                    "all": all_outputs,
                 }
                 if field_conf is not None:
                     confidences.append(field_conf)
@@ -503,8 +578,7 @@ def run_pipeline(
             for field in OUTPUT_COLUMNS
             if field not in {"source_file", "page_number", "confidence_flag", "raw_ocr_text"}
         )
-        finalized = finalize_record(raw_record, expected_row_no=row_no)
-        records.append(finalized)
+        raw_records.append(raw_record)
         debug_rows.append(
             {
                 "row_no": row_no,
@@ -514,6 +588,10 @@ def run_pipeline(
                 "mean_confidence": raw_record["_mean_confidence"],
             }
         )
+
+    records = finalize_records(raw_records, use_llm=use_llm)
+    kept_row_numbers = {int(record["row_no"]) for record in records}
+    debug_rows = [row for row in debug_rows if int(row["row_no"]) in kept_row_numbers]
 
     csv_path, xlsx_path = export_records(records, outdir)
     write_json(outdir / "debug" / "ocr_debug.json", debug_rows)

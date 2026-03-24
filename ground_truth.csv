@@ -1,0 +1,47 @@
+row_no,article,unit,foreign_quantity,foreign_value_rs,foreign_duty_rate,foreign_duty_rs,foreign_duty_as,foreign_duty_p,indian_quantity,indian_value_rs,indian_duty_rate,indian_duty_rs,indian_duty_as,indian_duty_p,total_value
+1,Boots and Shoes,,,2674,at 3 per Cent.,79,14,1,,4399,,,,,7073
+2,Gold Thread and Lace,,,752,at 3 per Cent.,22,8,9,,,,,,,752
+3,Hats and Caps,,,4537,at 3 per Cent.,136,1,10,,546,,,,,5083
+4,Millinery,,,4195,at 3 per Cent.,124,0,10,,588,,,,,4783
+5,Wearing Apparel,,,11839,at 3 per Cent.,335,8,2,,13730,at 3 per Cent.,2,8,10,25569
+6,Bamboos and Blinds,,,219,at 3 per Cent.,6,10,10,,41482,at 3 per Cent.,446,6,3,41701
+7,Bangles,,,,,,,,,1910,,,,,1910
+8,Beads,,,229,at 3 per Cent.,6,13,9,,2525,,,,,2754
+9,Books,,,16916,,,,,,11545,,,,,28461
+10,Stationery,,,130,at 3 per Cent.,2,8,0,,9536,,,,,9666
+11,Bones,Cwt.,18132,27550,at 3 per Cent.,826,10,0,,,,,,,27550
+12,Cabinet-Ware,,,4824,at 3 per Cent.,138,4,9,,7121,at 3 per Cent.,3,4,4,11945
+13,Carriages,,,2450,at 3 per Cent.,64,8,0,,12900,,,,,15350
+14,Bullocks,No.,7961,118172,,,,,,,,,,,118172
+15,Horses,"""",456,28670,,,,,,,,,,,28670
+16,Sheep,"""",54752,88613,,,,,100,300,,,,,88913
+17,Other Sorts,"""",,634,,,,,,,,,,,634
+18,Chanks,No.,5773570,8679,,,,,1531588,62696,,,,,91375
+19,Coffee,lbs.,21137217,5187685,,,,,6185910,1367986,,,,,6555671
+20,Cotton Wool,"""",7051920,43514710,,,,,1971666,1203402,,,,,44718112
+21,Twist and Yarn,,698,304,at 3 per Cent.,9,2,9,600,267,at 3 per Cent.,7,14,0,571
+22,Piece Goods Dyed,Pieces,375976,793178,at 3 per Cent.,23733,3,4,45531,201348,at 3 per Cent.,38,6,7,994526
+23,Do. Printed,"""",68556,113891,at 3 per Cent.,3416,12,1,16288,76384,,,,,190275
+24,Do. Plain,"""",124261,231253,at 3 per Cent.,6930,6,10,49225,220077,at 3 per Cent.,488,12,6,451330
+25,Lace and Small Ware,,,,,,,,,1656,,,,,1656
+26,Cowries,,,919,at 3 per Cent.,27,8,11,,,,,,,919
+27,Dregs of Gingely Oil,Cwt.,156847,436339,at 3 per Cent.,13090,13,9,,,,,,,436339
+28,Aloes,"""",203,2029,at 3 per Cent.,60,14,1,235,2022,,,,,4051
+29,Camphor,lbs.,9768,6692,at 3 per Cent.,200,12,8,168,126,at 3 per Cent.,3,12,6,6818
+30,Cocculus Indicus,Cwt.,155,371,at 3 per Cent.,11,2,4,5,15,,,,,386
+31,Cuscus Root,"""",49,243,at 3 per Cent.,7,4,4,915,5766,at 3 per Cent.,1,6,7,6009
+32,Gallingal,"""",,,,,,,1746,6406,,,,,6406
+33,Gallnuts,"""",5726,11457,at 3 per Cent.,343,11,0,,,,,,,11457
+34,Myrabolanes,"""",11953,23907,at 3 per Cent.,717,3,11,5156,10331,at 3 per Cent.,47,12,3,34238
+35,Nux Vomica,"""",665,1329,at 3 per Cent.,39,13,2,1072,2145,,,,,3474
+36,Senna Leaves,"""",2132,30548,at 3 per Cent.,916,6,8,56,825,,,,,31373
+37,Zedore Zerumbeth,"""",15,112,at 3 per Cent.,3,6,3,407,4257,at 3 per Cent.,0,13,8,4369
+38,Other Sorts,,,17643,at 3 per Cent.,525,10,9,,15042,at 3 per Cent.,9,8,2,32685
+39,Catechu or Terrajaponica,Cwt.,633,6022,at 3 per Cent.,180,8,0,6,52,,,,,6074
+40,Indigo,lbs.,2021804,4083755,at 3 Rs. per In. Md.,73959,0,4,1980,3504,,,,,4087259
+41,Turmeric,Cwt.,10172,30870,at 3 per Cent.,926,6,4,6608,19786,at 3 per Cent.,163,8,11,50656
+42,Other Sorts,,,30,at 3 per Cent.,0,14,5,,540,at 3 per Cent.,16,3,5,570
+43,Emigrants' Stores,,,2989,,,,,,,,,,,2989
+44,Feathers,No.,108459,15026,at 3 per Cent.,450,11,9,21000,3240,,,,,18266
+45,Firewood,,,112,,,,,,364,at 3 per Cent.,0,12,0,476
+46,Fishmaws,Cwt.,97,4856,at 3 per Cent.,145,10,7,525,26313,,,,,31169

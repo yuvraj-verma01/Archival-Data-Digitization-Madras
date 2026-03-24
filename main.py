@@ -48,6 +48,31 @@ def parse_args() -> argparse.Namespace:
         default="auto",
         help="OCR backend preference. 'auto' tries Paddle first and falls back to Tesseract.",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Save full-page debug grid overlays for the left and right pages.",
+    )
+    parser.add_argument(
+        "--no-paddle",
+        action="store_true",
+        help="Exclude PaddleOCR from the optional cell-level OCR ensemble.",
+    )
+    parser.add_argument(
+        "--no-deepseek",
+        action="store_true",
+        help="Exclude the local DeepSeek OCR Ollama model from weak-cell fallback.",
+    )
+    parser.add_argument(
+        "--no-glm",
+        action="store_true",
+        help="Exclude the local GLM OCR Ollama model from the optional ensemble.",
+    )
+    parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Skip the local Ollama-based weak-row validator.",
+    )
     return parser.parse_args()
 
 
@@ -68,6 +93,11 @@ def main() -> int:
         expected_rows=args.expected_rows,
         layout_name=args.layout,
         ocr_backend=args.ocr_backend,
+        debug=args.debug,
+        use_paddle=(not args.no_paddle),
+        use_deepseek=(not args.no_deepseek),
+        use_glm=(not args.no_glm),
+        use_llm=(not args.no_llm),
     )
 
     print(f"Rows exported: {result['rows']}")
