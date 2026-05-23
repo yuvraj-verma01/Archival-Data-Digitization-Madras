@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from .exporter import export_records
-from .layouts import SPREAD_LAYOUTS
+from .layouts import resolve_spread_layout
 from .models import PageArtifacts
 from known_articles import KNOWN_ARTICLES
 
@@ -309,6 +309,7 @@ def _page_artifacts(
     page_number: int,
     dpi: int,
     layout,
+    row_start: int,
     expected_rows: int,
     backend_chain: OCRBackendChain,
     output_dirs: dict[str, Path],
@@ -337,6 +338,7 @@ def _page_artifacts(
         layout=layout,
         table_width=table_image.shape[1],
         table_height=table_image.shape[0],
+        row_start=row_start,
         expected_rows=expected_rows,
     )
     row_bounds = build_row_bound_map(row_centers, table_image.shape[0])
@@ -371,11 +373,11 @@ def run_pipeline(
     ocr_backend: str,
     debug: bool = False,
     use_paddle: bool = True,
-    use_deepseek: bool = True,
     use_glm: bool = True,
     use_llm: bool = True,
 ) -> dict:
-    layout_bundle = SPREAD_LAYOUTS[layout_name]
+    layout_bundle = resolve_spread_layout(layout_name, start_page)
+    row_start = layout_bundle.get("row_start", 1)
     expected_rows = expected_rows or layout_bundle["expected_rows"]
     if start_page < 1:
         raise ValueError("--start-page must be a 1-based page number.")
@@ -391,7 +393,6 @@ def run_pipeline(
         backend_name=ocr_backend,
         workspace_root=outdir,
         allow_paddle=use_paddle,
-        use_deepseek=use_deepseek,
         use_glm=use_glm,
         known_articles=KNOWN_ARTICLES,
     )
@@ -401,6 +402,7 @@ def run_pipeline(
         page_number=start_page,
         dpi=dpi,
         layout=layout_bundle["left"],
+        row_start=row_start,
         expected_rows=expected_rows,
         backend_chain=backend_chain,
         output_dirs=output_dirs,
@@ -410,6 +412,7 @@ def run_pipeline(
         page_number=start_page + 1,
         dpi=dpi,
         layout=layout_bundle["right"],
+        row_start=row_start,
         expected_rows=expected_rows,
         backend_chain=backend_chain,
         output_dirs=output_dirs,
@@ -432,7 +435,7 @@ def run_pipeline(
     raw_records: list[dict] = []
     debug_rows: list[dict] = []
 
-    for row_no in range(1, expected_rows + 1):
+    for row_no in range(row_start, row_start + expected_rows):
         raw_record = {
             "source_file": pdf_path.name,
             "page_number": f"{start_page}-{start_page + 1}",

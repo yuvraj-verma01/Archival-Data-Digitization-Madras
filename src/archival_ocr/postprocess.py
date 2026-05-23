@@ -24,7 +24,7 @@ except Exception:
         return records
 
 from .schema import NUMERIC_FIELDS, RATE_FIELDS
-from .utils import clean_whitespace, is_placeholder_blank, normalize_basic_text
+from .utils import NOISE_TOKENS, clean_whitespace, is_placeholder_blank, normalize_basic_text
 
 CATEGORY_LABELS = {
     "Apparel",
@@ -68,6 +68,9 @@ UNIT_NORMALIZATION = {
     "lbs": "lbs.",
     "lbs.": "lbs.",
 }
+
+ARTICLE_EDGE_NUMBER = re.compile(r"^\d{1,3}$")
+ARTICLE_STRIP_CHARS = "\"'`.,;:()[]{}|/\\_-+=~*%^!?£©™"
 
 
 def clean_numeric_value(raw_text: str) -> tuple[Any, bool]:
@@ -116,15 +119,46 @@ def clean_text_field(field_name: str, raw_text: str) -> str:
     return text
 
 
+def _normalize_article_token(token: str) -> str:
+    return token.strip(ARTICLE_STRIP_CHARS).lower()
+
+
+def _is_article_edge_noise(token: str, has_neighbors: bool) -> bool:
+    normalized = _normalize_article_token(token)
+    if not normalized:
+        return True
+    if ARTICLE_EDGE_NUMBER.fullmatch(normalized):
+        return True
+    if normalized in NOISE_TOKENS:
+        return True
+    if has_neighbors and len(normalized) == 1 and normalized not in {"a"}:
+        return True
+    if not re.search(r"[a-z0-9]", normalized):
+        return True
+    return False
+
+
+def _strip_article_edge_noise(text: str) -> str:
+    tokens = text.split()
+    while len(tokens) > 1 and _is_article_edge_noise(tokens[0], has_neighbors=True):
+        tokens.pop(0)
+    while len(tokens) > 1 and _is_article_edge_noise(tokens[-1], has_neighbors=True):
+        tokens.pop()
+    return " ".join(tokens)
+
+
 def clean_article_field(raw_text: str) -> str:
     text = normalize_basic_text(raw_text)
     if not text or is_placeholder_blank(text):
         return ""
+    text = _strip_article_edge_noise(text)
     while text and text[0] in LEADING_ARTICLE_TRIM_CHARS:
         text = text[1:].lstrip()
     while text.endswith("..."):
         text = text[:-3].rstrip()
     text = text.rstrip(TRAILING_ARTICLE_PUNCTUATION)
+    text = _strip_article_edge_noise(text)
+    text = clean_whitespace(text)
     if not re.search(r"[A-Za-z0-9]", text):
         return ""
     return text
@@ -138,7 +172,9 @@ def snap_known_article(article: str) -> str:
     if not match:
         return cleaned
     candidate, score, _ = match
-    if score > 85:
+    has_noise = bool(re.search(r"\d", cleaned)) or bool(re.search(r"[^A-Za-z0-9 .,&'-]", cleaned))
+    threshold = 72 if has_noise else 85
+    if score >= threshold:
         return str(candidate)
     return cleaned
 

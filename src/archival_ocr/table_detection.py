@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from statistics import median
 from pathlib import Path
 
@@ -11,7 +12,6 @@ import numpy as np
 
 from .layouts import PageLayout
 from .models import BoundingBox, OCRToken
-from .ocr_engines import parse_integer_candidate
 
 
 def detect_table_bbox(binary_image: np.ndarray) -> BoundingBox:
@@ -84,22 +84,44 @@ def draw_table_overlay(image: np.ndarray, bbox: BoundingBox) -> np.ndarray:
     return overlay
 
 
+def _parse_row_number_candidate(text: str, row_start: int, row_end: int) -> int | None:
+    digits = re.findall(r"\d+", text)
+    if len(digits) != 1:
+        return None
+    raw = digits[0]
+    value = int(raw)
+    candidates = [value]
+    if row_end >= 100 and len(raw) <= 2:
+        candidates.extend(
+            [
+                value + (100 * (row_start // 100)),
+                value + (100 * (row_end // 100)),
+            ]
+        )
+    for candidate in candidates:
+        if row_start <= candidate <= row_end:
+            return candidate
+    return None
+
+
 def collect_row_number_candidates(
     tokens: list[OCRToken],
     layout: PageLayout,
     table_width: int,
     table_height: int,
+    row_start: int,
     expected_rows: int,
 ) -> dict[int, float]:
     row_x0 = int(layout.row_number_ratio[0] * table_width)
     row_x1 = int(layout.row_number_ratio[1] * table_width)
+    row_end = row_start + expected_rows - 1
     grouped: dict[int, list[tuple[float, float]]] = {}
     for token in tokens:
         if token.x_center < row_x0 or token.x_center > row_x1:
             continue
         if token.y_center < table_height * layout.fallback_body_top_ratio * 0.75:
             continue
-        row_number = parse_integer_candidate(token.text, expected_rows)
+        row_number = _parse_row_number_candidate(token.text, row_start, row_end)
         if row_number is None:
             continue
         grouped.setdefault(row_number, []).append((token.confidence, token.y_center))
@@ -111,11 +133,19 @@ def collect_row_number_candidates(
     return anchors
 
 
-def _fallback_row_center_map(layout: PageLayout, table_height: int, expected_rows: int) -> dict[int, float]:
+def _fallback_row_center_map(
+    layout: PageLayout,
+    table_height: int,
+    row_start: int,
+    expected_rows: int,
+) -> dict[int, float]:
     top = table_height * layout.fallback_body_top_ratio
     bottom = table_height * layout.fallback_body_bottom_ratio
     step = (bottom - top) / max(expected_rows - 1, 1)
-    return {row_number: top + (step * (row_number - 1)) for row_number in range(1, expected_rows + 1)}
+    return {
+        row_number: top + (step * (row_number - row_start))
+        for row_number in range(row_start, row_start + expected_rows)
+    }
 
 
 def build_row_center_map(
@@ -123,6 +153,7 @@ def build_row_center_map(
     layout: PageLayout,
     table_width: int,
     table_height: int,
+    row_start: int,
     expected_rows: int,
 ) -> tuple[dict[int, float], dict[int, float]]:
     """
@@ -130,13 +161,20 @@ def build_row_center_map(
     row-number anchors. This keeps the left and right pages aligned by row number
     without over-trusting individual bad anchors.
     """
-    anchors = collect_row_number_candidates(tokens, layout, table_width, table_height, expected_rows)
+    anchors = collect_row_number_candidates(
+        tokens,
+        layout,
+        table_width,
+        table_height,
+        row_start,
+        expected_rows,
+    )
     if len(anchors) < 4:
         logging.warning(
             "Row-number OCR was sparse on the %s page; using the template row grid.",
             layout.side,
         )
-        return _fallback_row_center_map(layout, table_height, expected_rows), anchors
+        return _fallback_row_center_map(layout, table_height, row_start, expected_rows), anchors
 
     best_score = None
     best_step = None
@@ -151,10 +189,11 @@ def build_row_center_map(
         for intercept in np.arange(min_intercept, max_intercept + 0.1, 0.5):
             score = 0
             for row_number, y_center in anchors.items():
-                predicted_row = round((y_center - intercept) / step)
-                if predicted_row == row_number:
+                row_index = row_number - row_start + 1
+                predicted_index = round((y_center - intercept) / step)
+                if predicted_index == row_index:
                     score += 3
-                elif abs(predicted_row - row_number) == 1:
+                elif abs(predicted_index - row_index) == 1:
                     score += 1
             if best_score is None or score > best_score:
                 best_score = score
@@ -166,11 +205,11 @@ def build_row_center_map(
             "Unable to fit a row grid on the %s page; using the template row grid.",
             layout.side,
         )
-        return _fallback_row_center_map(layout, table_height, expected_rows), anchors
+        return _fallback_row_center_map(layout, table_height, row_start, expected_rows), anchors
 
     centers = {
-        row_number: best_intercept + (best_step * row_number)
-        for row_number in range(1, expected_rows + 1)
+        row_number: best_intercept + (best_step * (row_number - row_start + 1))
+        for row_number in range(row_start, row_start + expected_rows)
     }
     return centers, anchors
 

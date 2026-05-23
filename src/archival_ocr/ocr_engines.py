@@ -33,7 +33,6 @@ from .utils import NOISE_TOKENS, clean_whitespace, is_placeholder_blank, normali
 
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
-DEEPSEEK_MODEL = os.environ.get("OLLAMA_DEEPSEEK_OCR_MODEL", "deepseek-ocr")
 GLM_MODEL = os.environ.get("OLLAMA_GLM_OCR_MODEL", "glm-ocr")
 OLLAMA_TIMEOUT = 60
 
@@ -281,10 +280,6 @@ def _run_ollama_ocr(image: np.ndarray, field_type: str, model_name: str) -> str:
         return ""
 
 
-def run_deepseek_ocr(image: np.ndarray, field_type: str) -> str:
-    return _run_ollama_ocr(image, field_type, DEEPSEEK_MODEL)
-
-
 def run_glm_ocr(image: np.ndarray, field_type: str) -> str:
     return _run_ollama_ocr(image, field_type, GLM_MODEL)
 
@@ -301,7 +296,7 @@ def _pick_text_result(results: dict[str, str], known_articles: set[str]) -> tupl
     best_engine = "none"
     best_value = ""
     best_score = 0.0
-    for engine_name in ("tesseract", "paddle", "deepseek", "glm"):
+    for engine_name in ("tesseract", "paddle", "glm"):
         candidate = clean_whitespace(results.get(engine_name, ""))
         if not candidate:
             continue
@@ -326,7 +321,6 @@ def ensemble_ocr(
     field_type: str,
     known_articles: set[str],
     use_paddle: bool,
-    use_deepseek: bool,
     use_glm: bool,
 ) -> dict[str, object]:
     tesseract_configs = {
@@ -338,8 +332,6 @@ def ensemble_ocr(
     }
     if use_paddle:
         all_results["paddle"] = run_paddleocr(image)
-    if use_deepseek:
-        all_results["deepseek"] = run_deepseek_ocr(image, field_type)
     if use_glm:
         all_results["glm"] = run_glm_ocr(image, field_type)
 
@@ -358,7 +350,7 @@ def ensemble_ocr(
         counts = Counter(normalized.values())
         winning_count = max(counts.values())
         winning_values = {value for value, count in counts.items() if count == winning_count}
-        for preferred_engine in ("tesseract", "paddle", "glm", "deepseek"):
+        for preferred_engine in ("tesseract", "paddle", "glm"):
             if normalized.get(preferred_engine) in winning_values:
                 return {
                     "value": normalized[preferred_engine],
@@ -458,14 +450,12 @@ class OCRBackendChain:
         backend_name: str,
         workspace_root: Path,
         allow_paddle: bool = False,
-        use_deepseek: bool = True,
         use_glm: bool = True,
         known_articles: set[str] | None = None,
     ) -> None:
         self.backend_name = backend_name
         self.workspace_root = workspace_root
         self.allow_paddle = allow_paddle
-        self.use_deepseek = use_deepseek
         self.use_glm = use_glm
         self.known_articles = known_articles or set()
         self._paddle = None
@@ -577,7 +567,6 @@ class OCRBackendChain:
                 field_type=field_type,
                 known_articles=self.known_articles,
                 use_paddle=self.allow_paddle,
-                use_deepseek=self.use_deepseek,
                 use_glm=self.use_glm,
             )
             return (
